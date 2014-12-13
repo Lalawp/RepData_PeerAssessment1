@@ -1,0 +1,168 @@
+
+#Reproducible Research Course Project 1
+Jonathan Stone  
+December 13, 2014  
+=========================================================
+
+The data for this assignment can be downloaded from [the course web site](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip):
+
+Dataset: Activity monitoring data [52K]
+The variables included in this dataset are:
+
+steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+date: The date on which the measurement was taken in YYYY-MM-DD format
+
+interval: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+#Assignment
+
+This assignment will be described in multiple parts. You will need to write a report that answers the questions detailed below. Ultimately, you will need to complete the entire assignment in a single R markdown document that can be processed by knitr and be transformed into an HTML file.
+
+
+Loading and preprocessing the data
+
+Show any code that is needed to
+
+Load the data (i.e. read.csv())
+
+```{r}
+unzip(zipfile="activity.zip")
+data <- read.csv("activity.csv")
+```
+
+Process/transform the data (if necessary) into a format suitable for your analysis
+
+##What is mean total number of steps taken per day?
+
+For this part of the assignment, you can ignore the missing values in the dataset.
+
+1. Make a histogram of the total number of steps taken each day
+
+```{r}
+library("plyr")
+newdata <- ddply(data, "date", summarize, total.steps=sum(steps))
+
+library("ggplot2")
+##uses ggplot to create a histogram
+ggplot(newdata, aes(total.steps)) +
+  geom_histogram(binwidth=1000) + 
+  ggtitle("Histogram, steps taken by day") +
+  xlab("steps taken") + 
+  ylab("frequency") 
+```
+
+2. Calculate and report the mean and median total number of steps taken per day
+
+```{r}
+meanmedian <- ddply(data, "date", summarize, mean.count=mean(steps), median.count=median(steps))
+meanmedian
+```
+
+##What is the average daily activity pattern?
+
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+interval <- ddply(data, "interval", summarize, mean.count=mean(steps, na.rm=TRUE))
+
+ggplot(interval, aes(x=interval, y=mean.count)) + 
+  geom_line() +
+  ggtitle("Average steps taken in 5 min intervals") +
+  xlab("5 minute interval") + 
+  ylab("Average of steps taken across all days")
+```
+
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+max(interval$mean.count)
+```
+
+##Imputing missing values
+
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r}
+sum(is.na(data$steps))
+```
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+For this question, I have used a mean replacement strategy, as it will maintain the mean for the data, and since no relationship identification questions will be asked, the attenuation will not be a concern. The mean for each 5 minute interval will be used to replace the NA values. 
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r}
+##Creating a new data frame to keep it fresh
+nonas <- data
+
+##Merging data frame from earlier to get mean value for each interval
+intervalnonas <- merge(nonas, interval, by="interval")
+
+##Replacing NA values with mean from each interval
+intervalnonas$steps[is.na(intervalnonas$steps)] <- intervalnonas$mean.count[is.na(intervalnonas$steps)]
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r}
+nonas2 <- ddply(intervalnonas, "date", summarize, total.steps=sum(steps))
+
+ggplot(nonas2, aes(total.steps)) +
+  geom_histogram(binwidth=1000) + 
+  ggtitle("Histogram, steps taken by day") +
+  xlab("steps taken") + 
+  ylab("frequency") 
+
+meanmedianNA <- ddply(intervalnonas, "date", summarize, median=median(steps), mean=mean(steps))
+meanmedianNA
+```
+
+Most notably, including the mean data for each interval has reduced the variance for the data. 
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+
+Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+##Converting date from a factor to date
+data$date <- as.Date(data$date, format="%Y-%m-%d")
+
+days <- weekdays(data$date, abbreviate=FALSE)
+
+weekend <- data.frame()
+
+for (i in 1:length(days)){
+  if (days[i]=="Sunday" | days[i]=="Saturday"){
+    weekend[i, 1]="Weekend"
+  }
+  else {
+    weekend[i, 1]="Weekday"
+  }
+}
+
+daydata <- cbind(data, weekend)
+colnames(daydata)[[4]]="weekend"
+```
+
+Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+```{r}
+averages <- aggregate(steps ~ interval + weekend, data=daydata, mean)
+
+ggplot(averages, aes(interval, steps)) + 
+  geom_line(colour="#56B4E9") + 
+  facet_grid(weekend ~ .) +
+  xlab("5 minute interval") +
+  ylab("Number of steps taken")
+```
+
+
+
